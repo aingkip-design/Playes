@@ -1,0 +1,103 @@
+local Players = game:GetService("Players") local RunService = game:GetService("RunService") local UserInputService = game:GetService("UserInputService") local LocalPlayer = Players.LocalPlayer
+
+-- ลบ UI เก่า (กันรันซ้ำ) local function getParent() local ok, ui = pcall(function() return gethui and gethui() end) if ok and ui then return ui end local ok2, core = pcall(function() return game:GetService("CoreGui") end) if ok2 and core then return core end return LocalPlayer:WaitForChild("PlayerGui") end
+
+local parent = getParent() local old = parent:FindFirstChild("FaceAtPlayerGui") if old then old:Destroy() end
+
+-- สถานะ local selected = nil      -- Player ที่เลือก local enabled = false     -- เปิด/ปิดการหันหน้า local rows = {}           -- ปุ่มรายชื่อ
+
+local COLOR_BG = Color3.fromRGB(28, 28, 36) local COLOR_ITEM = Color3.fromRGB(45, 45, 58) local COLOR_SEL = Color3.fromRGB(70, 120, 220) local COLOR_ON = Color3.fromRGB(60, 180, 90) local COLOR_OFF = Color3.fromRGB(190, 60, 60)
+
+-- สร้าง UI local gui = Instance.new("ScreenGui") gui.Name = "FaceAtPlayerGui" gui.ResetOnSpawn = false gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling gui.Parent = parent
+
+local function corner(obj, r) local c = Instance.new("UICorner") c.CornerRadius = UDim.new(0, r or 8) c.Parent = obj end
+
+local main = Instance.new("Frame") main.Size = UDim2.new(0, 230, 0, 300) main.Position = UDim2.new(0.5, -115, 0.5, -150) main.BackgroundColor3 = COLOR_BG main.BorderSizePixel = 0 main.Parent = gui corner(main, 10)
+
+local title = Instance.new("TextLabel") title.Size = UDim2.new(1, -40, 0, 32) title.Position = UDim2.new(0, 10, 0, 0) title.BackgroundTransparency = 1 title.Text = "หันหน้าตามผู้เล่น" title.TextColor3 = Color3.new(1, 1, 1) title.Font = Enum.Font.GothamBold title.TextSize = 15 title.TextXAlignment = Enum.TextXAlignment.Left title.Parent = main
+
+local closeBtn = Instance.new("TextButton") closeBtn.Size = UDim2.new(0, 26, 0, 24) closeBtn.Position = UDim2.new(1, -32, 0, 4) closeBtn.BackgroundColor3 = COLOR_OFF closeBtn.Text = "X" closeBtn.TextColor3 = Color3.new(1, 1, 1) closeBtn.Font = Enum.Font.GothamBold closeBtn.TextSize = 14 closeBtn.Parent = main corner(closeBtn, 6)
+
+local status = Instance.new("TextLabel") status.Size = UDim2.new(1, -20, 0, 20) status.Position = UDim2.new(0, 10, 0, 34) status.BackgroundTransparency = 1 status.Text = "ยังไม่ได้เลือกผู้เล่น" status.TextColor3 = Color3.fromRGB(180, 180, 190) status.Font = Enum.Font.Gotham status.TextSize = 12 status.TextXAlignment = Enum.TextXAlignment.Left status.TextTruncate = Enum.TextTruncate.AtEnd status.Parent = main
+
+local list = Instance.new("ScrollingFrame") list.Size = UDim2.new(1, -20, 1, -140) list.Position = UDim2.new(0, 10, 0, 58) list.BackgroundColor3 = Color3.fromRGB(20, 20, 26) list.BorderSizePixel = 0 list.ScrollBarThickness = 4 list.CanvasSize = UDim2.new(0, 0, 0, 0) list.AutomaticCanvasSize = Enum.AutomaticSize.Y list.Parent = main corner(list, 8)
+
+local layout = Instance.new("UIListLayout") layout.Padding = UDim.new(0, 4) layout.Parent = list
+
+local pad = Instance.new("UIPadding") pad.PaddingTop = UDim.new(0, 4) pad.PaddingLeft = UDim.new(0, 4) pad.PaddingRight = UDim.new(0, 4) pad.Parent = list
+
+local refreshBtn = Instance.new("TextButton") refreshBtn.Size = UDim2.new(1, -20, 0, 32) refreshBtn.Position = UDim2.new(0, 10, 1, -76) refreshBtn.BackgroundColor3 = Color3.fromRGB(80, 80, 200) refreshBtn.Text = "รีผู้เล่น" refreshBtn.TextColor3 = Color3.new(1, 1, 1) refreshBtn.Font = Enum.Font.GothamBold refreshBtn.TextSize = 14 refreshBtn.Parent = main corner(refreshBtn, 8)
+
+local toggleBtn = Instance.new("TextButton") toggleBtn.Size = UDim2.new(1, -20, 0, 32) toggleBtn.Position = UDim2.new(0, 10, 1, -38) toggleBtn.BackgroundColor3 = COLOR_OFF toggleBtn.Text = "หันหน้าตาม: ปิด" toggleBtn.TextColor3 = Color3.new(1, 1, 1) toggleBtn.Font = Enum.Font.GothamBold toggleBtn.TextSize = 14 toggleBtn.Parent = main corner(toggleBtn, 8)
+
+-- ปุ่มลอยเปิด/ปิดเมนู local openBtn = Instance.new("TextButton") openBtn.Size = UDim2.new(0, 44, 0, 44) openBtn.Position = UDim2.new(0, 10, 0.5, -22) openBtn.BackgroundColor3 = COLOR_BG openBtn.Text = "👁" openBtn.TextSize = 22 openBtn.TextColor3 = Color3.new(1, 1, 1) openBtn.Visible = false openBtn.Parent = gui corner(openBtn, 22)
+
+-- ลากได้ local function makeDraggable(handle, target) local dragging, dragStart, startPos, moved handle.InputBegan:Connect(function(input) if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then dragging = true moved = false dragStart = input.Position startPos = target.Position input.Changed:Connect(function() if input.UserInputState == Enum.UserInputState.End then dragging = false end end) end end) UserInputService.InputChanged:Connect(function(input) if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then local d = input.Position - dragStart if d.Magnitude > 5 then moved = true end target.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + d.X, startPos.Y.Scale, startPos.Y.Offset + d.Y) end end) return function() return moved end end
+
+makeDraggable(main, main) local openMoved = makeDraggable(openBtn, openBtn)
+
+closeBtn.MouseButton1Click:Connect(function() main.Visible = false openBtn.Visible = true end) openBtn.MouseButton1Click:Connect(function() if openMoved() then return end main.Visible = true openBtn.Visible = false end)
+
+-- ฟังก์ชัน 1: เลือกผู้เล่น local function updateStatus() if selected then status.Text = "เลือก: " .. selected.DisplayName .. " (@" .. selected.Name .. ")" else status.Text = "ยังไม่ได้เลือกผู้เล่น" end end
+
+local function selectPlayer(plr) selected = plr for p, btn in pairs(rows) do btn.BackgroundColor3 = (p == plr) and COLOR_SEL or COLOR_ITEM end updateStatus() end
+
+-- ฟังก์ชัน 2: รีรายชื่อผู้เล่น local function refreshList() for _, btn in pairs(rows) do btn:Destroy() end rows = {}
+
+ 
+for _, plr in ipairs(Players:GetPlayers()) do
+	if plr ~= LocalPlayer then
+		local btn = Instance.new("TextButton")
+		btn.Size = UDim2.new(1, 0, 0, 28)
+		btn.BackgroundColor3 = (plr == selected) and COLOR_SEL or COLOR_ITEM
+		btn.Text = plr.DisplayName .. " (@" .. plr.Name .. ")"
+		btn.TextColor3 = Color3.new(1, 1, 1)
+		btn.Font = Enum.Font.Gotham
+		btn.TextSize = 12
+		btn.TextTruncate = Enum.TextTruncate.AtEnd
+		btn.Parent = list
+		corner(btn, 6)
+		btn.MouseButton1Click:Connect(function() selectPlayer(plr) end)
+		rows[plr] = btn
+	end
+end
+
+-- ถ้าคนที่เลือกออกไปแล้ว ให้เคลียร์
+if selected and not rows[selected] then
+	selected = nil
+	updateStatus()
+end
+ 
+
+end
+
+refreshBtn.MouseButton1Click:Connect(refreshList) Players.PlayerRemoving:Connect(function() task.defer(refreshList) end)
+
+-- ฟังก์ชัน 3: เปิด/ปิดหันหน้าตาม local function setCharacterAutoRotate(value) local char = LocalPlayer.Character local hum = char and char:FindFirstChildOfClass("Humanoid") if hum then hum.AutoRotate = value end end
+
+local function setEnabled(state) enabled = state toggleBtn.Text = "หันหน้าตาม: " .. (enabled and "เปิด" or "ปิด") toggleBtn.BackgroundColor3 = enabled and COLOR_ON or COLOR_OFF if not enabled then setCharacterAutoRotate(true) end end
+
+toggleBtn.MouseButton1Click:Connect(function() if not enabled and not selected then status.Text = "กรุณาเลือกผู้เล่นก่อน!" return end setEnabled(not enabled) end)
+
+-- ลูปหันหน้า RunService.Heartbeat:Connect(function() if not enabled then return end if not selected or not selected.Parent then setEnabled(false) return end
+
+ 
+local myChar = LocalPlayer.Character
+local targetChar = selected.Character
+local myHRP = myChar and myChar:FindFirstChild("HumanoidRootPart")
+local targetHRP = targetChar and targetChar:FindFirstChild("HumanoidRootPart")
+if not (myHRP and targetHRP) then return end
+
+local hum = myChar:FindFirstChildOfClass("Humanoid")
+if hum then hum.AutoRotate = false end
+
+local myPos = myHRP.Position
+local lookAt = Vector3.new(targetHRP.Position.X, myPos.Y, targetHRP.Position.Z)
+if (lookAt - myPos).Magnitude > 0.1 then
+	myHRP.CFrame = CFrame.new(myPos, lookAt)
+end
+ 
+
+end)
+
+-- เริ่มต้น refreshList() updateStatus()
